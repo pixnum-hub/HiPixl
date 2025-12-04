@@ -25,6 +25,7 @@ Designed for speed, simplicity, and accuracy.
 /Hipixle
 │── index.html
 └── README.md
+└── LICENSE
 
 
 ---
