@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HiPixl — Smart Photo Upscaler</title>
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyBmaWxsPSIjZmZmIiB2aWV3Qm94PSIwIDAgMjQgMjQiPjxwYXRoIGQ9Ik0xMiAyYy0xLjEgMC0yIC45LTIgMnYxMmMwIDEuMS45IDIgMiAyczItLjkgMi0yVjRjMC0xLjEtLjktMi0yLTJ6bTAgMTRjLTEuMSAwLTItLjktMi0yVjRoNHYxMGMwIDEuMS0uOSAyLTIgMnoiLz48L3N2Zz4=" />
+<style>
+:root {
+  --bg: #111;
+  --fg: #f5f5f5;
+  --card-bg: #1e1e1e;
+  --border: #333;
+  --accent: #00c4ff;
+}
+body.light {
+  --bg: #f5f5f5;
+  --fg: #111;
+  --card-bg: #fff;
+  --border: #ccc;
+  --accent: #0077cc;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  transition: background 0.4s, color 0.4s;
+}
+
+.app-frame {
+  background: var(--card-bg);
+  border-radius: 18px;
+  border: 2px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  padding: 25px;
+  width: 95%;
+  max-width: 950px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: center;
+}
+
+h1 {
+  font-size: 1.8em;
+  color: var(--accent);
+  margin: 0;
+  letter-spacing: 1px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  background: var(--bg);
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn,
+input[type="file"],
+select,
+button {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 10px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn:hover,
+select:hover,
+input[type="file"]:hover,
+button:hover {
+  transform: scale(1.05);
+  background: var(--accent);
+  color: #000;
+}
+
+canvas {
+  max-width: 100%;
+  max-height: 70vh;
+  border-radius: 12px;
+  background: #000;
+}
+
+#infoBox {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 0.95em;
+  line-height: 1.5em;
+}
+
+footer {
+  opacity: 0.7;
+  font-size: 0.85em;
+  margin-top: 8px;
+}
+
+#spinner {
+  display: none;
+  margin-top: 8px;
+  color: var(--accent);
+  font-size: 0.95em;
+}
+#scaleSliderContainer {
+  flex: 1;
+  height: 6px;
+  background: #444;
+  border-radius: 3px;
+  position: relative;
+  cursor: pointer;
+  margin-left: 10px;
+}
+#scaleSliderHandle {
+  position: absolute;
+  top: -4px;
+  left: 0;
+  width: 14px;
+  height: 14px;
+  background: var(--accent);
+  border-radius: 50%;
+}
+</style>
+</head>
+<body>
+<div class="app-frame">
+  <h1>✨ HiPixl</h1>
+
+  <!-- Toolbar 1 -->
+  <div class="toolbar">
+    <div class="toolbar-group">
+      <input type="file" id="fileInput" accept="image/*">
+      <button class="btn" id="clearBtn">Clear</button>
+      <button class="btn" id="downloadBtn">Download</button>
+    </div>
+    <div class="toolbar-group">
+      <button class="btn" id="modeToggle">🌙</button>
+    </div>
+  </div>
+
+  <!-- Toolbar 2 -->
+  <div class="toolbar">
+    <div class="toolbar-group">
+      <label>Scale:</label>
+      <button class="btn" id="decreaseScale">-</button>
+      <input type="number" id="scaleInput" value="1" min="1" max="250" step="1" style="width:50px;text-align:center;">
+      <button class="btn" id="increaseScale">+</button>
+      <div id="scaleSliderContainer"><div id="scaleSliderHandle"></div></div>
+      <span id="scaleLabel">1x</span>
+    </div>
+    <div class="toolbar-group">
+      <label>Quality:
+        <select id="qualitySelect">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <canvas id="afterCanvas"></canvas>
+  <div id="spinner">Upscaling… Please wait</div>
+  <div id="infoBox">No image loaded.</div>
+  <footer>© Manik Roy 2025. All Rights Reserved.</footer>
+</div>
+
+<script>
+const fileInput = document.getElementById('fileInput');
+const clearBtn = document.getElementById('clearBtn');
+const downloadBtn = document.getElementById('downloadBtn');
+const scaleInput = document.getElementById('scaleInput');
+const scaleLabel = document.getElementById('scaleLabel');
+const decreaseScale = document.getElementById('decreaseScale');
+const increaseScale = document.getElementById('increaseScale');
+const sliderContainer = document.getElementById('scaleSliderContainer');
+const sliderHandle = document.getElementById('scaleSliderHandle');
+const qualitySelect = document.getElementById('qualitySelect');
+const afterCanvas = document.getElementById('afterCanvas');
+const modeToggle = document.getElementById('modeToggle');
+const infoBox = document.getElementById('infoBox');
+const spinner = document.getElementById('spinner');
+
+let img = new Image();
+const minScale = 1;
+const maxScale = 250;
+
+// File input
+fileInput.addEventListener('change', e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev=>{
+    img.onload = ()=> performUpscale();
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+// Clear
+clearBtn.addEventListener('click', ()=>{
+  const ctx = afterCanvas.getContext('2d');
+  ctx.clearRect(0,0,afterCanvas.width,afterCanvas.height);
+  fileInput.value = '';
+  img.src = '';
+  updateScale(1);
+  infoBox.textContent = "No image loaded.";
+});
+
+// Download
+downloadBtn.addEventListener('click', ()=>{
+  const link = document.createElement('a');
+  link.download = 'upscaled.png';
+  link.href = afterCanvas.toDataURL();
+  link.click();
+});
+
+// Mode toggle
+modeToggle.addEventListener('click', ()=>{
+  document.body.classList.toggle('light');
+  modeToggle.textContent = document.body.classList.contains('light') ? '☀️' : '🌙';
+});
+
+// Scale logic
+function updateScale(value){
+  value = Math.max(minScale, Math.min(maxScale, Math.round(value)));
+  scaleInput.value = value;
+  scaleLabel.textContent = value + 'x';
+  const pct = (value - minScale)/(maxScale - minScale);
+  sliderHandle.style.left = `calc(${pct*100}% - 7px)`;
+  performUpscale();
+}
+
+scaleInput.addEventListener('input', ()=>updateScale(scaleInput.value));
+decreaseScale.addEventListener('click', ()=>updateScale(Number(scaleInput.value)-1));
+increaseScale.addEventListener('click', ()=>updateScale(Number(scaleInput.value)+1));
+
+// Slider drag
+let dragging = false;
+sliderHandle.addEventListener('mousedown', e=>{dragging=true;e.preventDefault();});
+document.addEventListener('mouseup', ()=>dragging=false);
+document.addEventListener('mousemove', e=>{
+  if(!dragging) return;
+  const rect = sliderContainer.getBoundingClientRect();
+  let pct = (e.clientX - rect.left)/rect.width;
+  pct = Math.max(0, Math.min(1, pct));
+  updateScale(Math.round(minScale + pct*(maxScale-minScale)));
+});
+// Click on track
+sliderContainer.addEventListener('click', e=>{
+  const rect = sliderContainer.getBoundingClientRect();
+  let pct = (e.clientX - rect.left)/rect.width;
+  pct = Math.max(0, Math.min(1, pct));
+  updateScale(Math.round(minScale + pct*(maxScale-minScale)));
+});
+
+// Quality change
+qualitySelect.addEventListener('change', ()=>performUpscale());
+
+// Perform upscale
+function performUpscale(){
+  if(!img.src) return;
+  spinner.style.display = 'block';
+  setTimeout(()=>{
+    const factor = Number(scaleInput.value);
+    let targetWidth = img.width*factor;
+    let targetHeight = img.height*factor;
+    const maxMP = 150_000_000;
+    if(targetWidth*targetHeight>maxMP){
+      const scale = Math.sqrt(maxMP/(targetWidth*targetHeight));
+      targetWidth = Math.floor(targetWidth*scale);
+      targetHeight = Math.floor(targetHeight*scale);
+    }
+    afterCanvas.width = targetWidth;
+    afterCanvas.height = targetHeight;
+    const ctx = afterCanvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = qualitySelect.value; // low / medium / high
+    ctx.drawImage(img,0,0,targetWidth,targetHeight);
+    spinner.style.display = 'none';
+    updateInfo(targetWidth,targetHeight);
+  },50);
+}
+
+// Update info box with Original & Upscaled info
+function updateInfo(w, h){
+  if(!img.src) return;
+
+  // Original image info
+  const origW = img.width;
+  const origH = img.height;
+  const origMP = (origW * origH / 1_000_000).toFixed(2);
+  const origBytes = origW * origH * 3 * 0.25;
+  const origMB = (origBytes / 1024 / 1024).toFixed(2);
+  const origInchesW = (origW / 300).toFixed(2);
+  const origInchesH = (origH / 300).toFixed(2);
+  const origCmW = (origInchesW * 2.54).toFixed(1);
+  const origCmH = (origInchesH * 2.54).toFixed(1);
+
+  // Upscaled info
+  const mp = (w*h/1_000_000).toFixed(2);
+  const estBytes = w*h*3*0.25;
+  const estMB = (estBytes / 1024 / 1024).toFixed(2);
+  const inchesW = (w/300).toFixed(2);
+  const inchesH = (h/300).toFixed(2);
+  const cmW = (inchesW * 2.54).toFixed(1);
+  const cmH = (inchesH * 2.54).toFixed(1);
+
+  infoBox.innerHTML = `
+    <div style="display:flex; justify-content:space-around; flex-wrap:wrap; gap:10px;">
+      <div>
+        <b>Original Info:</b><br>
+        Dimensions: ${origW} × ${origH}px (${origMP} MP)<br>
+        Est. File Size: ~${origMB} MB<br>
+        Print Size @300DPI: ${origInchesW}" × ${origInchesH}" (${origCmW} × ${origCmH} cm)
+      </div>
+      <div>
+        <b>Upscaled Info:</b><br>
+        Dimensions: ${w} × ${h}px (${mp} MP)<br>
+        Est. File Size: ~${estMB} MB<br>
+        Print Size @300DPI: ${inchesW}" × ${inchesH}" (${cmW} × ${cmH} cm)
+      </div>
+    </div>
+  `;
+}
+
+// Initialize
+updateScale(1);
+</script>
+</body>
+</html>
